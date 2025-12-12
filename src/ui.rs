@@ -1,9 +1,9 @@
-use crate::app::{App, ComposeField, ConfigField, CurrentPage, InputMode};
+use crate::app::App;
+use crate::enums::{ComposeField, ConfigField, CurrentPage, InputMode, Notification};
 use ratatui::{
     Frame,
     layout::{Constraint, Direction, Layout, Rect},
     style::{Color, Modifier, Style},
-    text::{Line, Span},
     widgets::{Block, Borders, Paragraph, Tabs},
 };
 
@@ -63,6 +63,7 @@ fn draw_compose(frame: &mut Frame, app: &App, area: Rect) {
         ],
         |f| app.compose_field == *f,
     );
+
     let recipient = Paragraph::new(app.draft.recipient.as_str())
         .block(Block::default().borders(Borders::ALL).title("To"))
         .style(styles[0]);
@@ -114,7 +115,6 @@ fn draw_config(frame: &mut Frame, app: &App, area: Rect) {
 
     let styles = get_field_styles(app, &fields, |f| app.config_field == *f);
 
-    // Helper to render input fields
     let mut render_input = |idx: usize, title: &str, val: &str, secure: bool| {
         let content = if secure && !val.is_empty() {
             "*".repeat(val.len())
@@ -133,7 +133,6 @@ fn draw_config(frame: &mut Frame, app: &App, area: Rect) {
     render_input(3, "Institution", &app.config.identity.institution, false);
     render_input(4, "Phone", &app.config.identity.phone, false);
 
-    // Join emails for display
     let email_str = app.config.identity.emails.join(", ");
     render_input(5, "Emails (comma separated)", &email_str, false);
 
@@ -143,18 +142,31 @@ fn draw_config(frame: &mut Frame, app: &App, area: Rect) {
 }
 
 fn draw_status_bar(frame: &mut Frame, app: &App, area: Rect) {
-    let help_text = match app.input_mode {
-        InputMode::Normal => {
-            "Normal: [Tab] Next Field | [Enter] Edit | [1/2] Switch Page | [Ctrl+s] Save Config | [q] Quit"
+    let (text, color) = if let Some(note) = &app.notification {
+        match note {
+            Notification::Info(msg) => (format!(" ℹ️  {} ", msg), Color::Blue),
+            Notification::Success(msg) => (format!(" ✅ {} ", msg), Color::Green),
+            Notification::Error(msg) => (format!(" ❌ {} ", msg), Color::Red),
         }
-        InputMode::Editing => "Editing: [Esc] Stop | [Enter] Next Field",
+    } else {
+        match app.input_mode {
+            InputMode::Normal => (
+                " [Tab] Next | [Enter] Edit | [Ctrl+Enter] Send Email | [1/2] Switch Page | [q] Quit".to_string(), 
+                Color::DarkGray
+            ),
+            InputMode::Editing => (
+                " Editing Mode: [Esc] Finish Editing".to_string(), 
+                Color::Yellow
+            ),
+        }
     };
 
-    let status = Paragraph::new(help_text).style(Style::default().fg(Color::DarkGray));
+    let status =
+        Paragraph::new(text).style(Style::default().fg(color).add_modifier(Modifier::BOLD));
+
     frame.render_widget(status, area);
 }
 
-// Helper to calculate styles for a list of fields based on current selection
 fn get_field_styles<T, F>(app: &App, fields: &[T], is_current: F) -> Vec<Style>
 where
     F: Fn(&T) -> bool,

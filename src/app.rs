@@ -1,54 +1,19 @@
 use crate::config::AppConfig;
+pub use crate::enums::*;
+use crate::enums::{ComposeField, ConfigField, CurrentPage, InputMode, Notification};
 use crate::models::EmailDraft;
-
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub enum InputMode {
-    #[default]
-    Normal,
-    Editing,
-}
-
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub enum CurrentPage {
-    #[default]
-    Compose,
-    Config,
-}
-
-// Navigation for Compose Page
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub enum ComposeField {
-    #[default]
-    Recipient,
-    Subject,
-    Body,
-}
-
-// Navigation for Config Page
-#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
-pub enum ConfigField {
-    #[default]
-    Name,
-    Role,
-    Department,
-    Institution,
-    Phone,
-    Emails, // Comma separated for simplicity in UI
-    SmtpUser,
-    SmtpPass,
-    WorkerUrl,
-}
 
 pub struct App {
     pub should_quit: bool,
     pub input_mode: InputMode,
     pub current_page: CurrentPage,
+    pub notification: Option<Notification>,
 
-    // State for Compose Page
+    // Compose State
     pub compose_field: ComposeField,
     pub draft: EmailDraft,
 
-    // State for Config Page
+    // Config State
     pub config_field: ConfigField,
     pub config: AppConfig,
 }
@@ -59,11 +24,24 @@ impl App {
             should_quit: false,
             input_mode: InputMode::Normal,
             current_page: CurrentPage::Compose,
+            notification: None,
             compose_field: ComposeField::Recipient,
             draft: EmailDraft::default(),
             config_field: ConfigField::Name,
             config,
         }
+    }
+
+    pub fn quit(&mut self) {
+        self.should_quit = true;
+    }
+
+    pub fn set_notification(&mut self, note: Notification) {
+        self.notification = Some(note);
+    }
+
+    pub fn clear_notification(&mut self) {
+        self.notification = None;
     }
 
     pub fn toggle_editing(&mut self) {
@@ -78,36 +56,132 @@ impl App {
             CurrentPage::Compose => CurrentPage::Config,
             CurrentPage::Config => CurrentPage::Compose,
         };
-        // Reset mode when switching
         self.input_mode = InputMode::Normal;
+        self.clear_notification();
     }
 
     pub fn cycle_field(&mut self) {
         match self.current_page {
-            CurrentPage::Compose => {
-                self.compose_field = match self.compose_field {
-                    ComposeField::Recipient => ComposeField::Subject,
-                    ComposeField::Subject => ComposeField::Body,
-                    ComposeField::Body => ComposeField::Recipient,
-                };
+            CurrentPage::Compose => self.cycle_compose_field(),
+            CurrentPage::Config => self.cycle_config_field(),
+        }
+    }
+
+    fn cycle_compose_field(&mut self) {
+        self.compose_field = match self.compose_field {
+            ComposeField::Recipient => ComposeField::Subject,
+            ComposeField::Subject => ComposeField::Body,
+            ComposeField::Body => ComposeField::Recipient,
+        };
+    }
+
+    fn cycle_config_field(&mut self) {
+        self.config_field = match self.config_field {
+            ConfigField::Name => ConfigField::Role,
+            ConfigField::Role => ConfigField::Department,
+            ConfigField::Department => ConfigField::Institution,
+            ConfigField::Institution => ConfigField::Phone,
+            ConfigField::Phone => ConfigField::Emails,
+            ConfigField::Emails => ConfigField::SmtpUser,
+            ConfigField::SmtpUser => ConfigField::SmtpPass,
+            ConfigField::SmtpPass => ConfigField::WorkerUrl,
+            ConfigField::WorkerUrl => ConfigField::Name,
+        };
+    }
+
+    pub fn push_input(&mut self, c: char) {
+        match self.current_page {
+            CurrentPage::Compose => self.handle_compose_input(c),
+            CurrentPage::Config => self.handle_config_input(c),
+        }
+    }
+
+    pub fn pop_input(&mut self) {
+        match self.current_page {
+            CurrentPage::Compose => self.handle_compose_backspace(),
+            CurrentPage::Config => self.handle_config_backspace(),
+        }
+    }
+
+    fn handle_compose_input(&mut self, c: char) {
+        match self.compose_field {
+            ComposeField::Recipient => self.draft.recipient.push(c),
+            ComposeField::Subject => self.draft.subject.push(c),
+            ComposeField::Body => self.draft.body.push(c),
+        }
+    }
+
+    fn handle_compose_backspace(&mut self) {
+        match self.compose_field {
+            ComposeField::Recipient => {
+                self.draft.recipient.pop();
             }
-            CurrentPage::Config => {
-                self.config_field = match self.config_field {
-                    ConfigField::Name => ConfigField::Role,
-                    ConfigField::Role => ConfigField::Department,
-                    ConfigField::Department => ConfigField::Institution,
-                    ConfigField::Institution => ConfigField::Phone,
-                    ConfigField::Phone => ConfigField::Emails,
-                    ConfigField::Emails => ConfigField::SmtpUser,
-                    ConfigField::SmtpUser => ConfigField::SmtpPass,
-                    ConfigField::SmtpPass => ConfigField::WorkerUrl,
-                    ConfigField::WorkerUrl => ConfigField::Name,
-                };
+            ComposeField::Subject => {
+                self.draft.subject.pop();
+            }
+            ComposeField::Body => {
+                self.draft.body.pop();
             }
         }
     }
 
-    pub fn quit(&mut self) {
-        self.should_quit = true;
+    fn handle_config_input(&mut self, c: char) {
+        match self.config_field {
+            ConfigField::Name => self.config.identity.name.push(c),
+            ConfigField::Role => self.config.identity.role.push(c),
+            ConfigField::Department => self.config.identity.department.push(c),
+            ConfigField::Institution => self.config.identity.institution.push(c),
+            ConfigField::Phone => self.config.identity.phone.push(c),
+            ConfigField::Emails => self.modify_emails(c, false),
+            ConfigField::SmtpUser => self.config.smtp_username.push(c),
+            ConfigField::SmtpPass => self.config.smtp_app_password.push(c),
+            ConfigField::WorkerUrl => self.config.worker_url.push(c),
+        }
+    }
+
+    fn handle_config_backspace(&mut self) {
+        match self.config_field {
+            ConfigField::Name => {
+                self.config.identity.name.pop();
+            }
+            ConfigField::Role => {
+                self.config.identity.role.pop();
+            }
+            ConfigField::Department => {
+                self.config.identity.department.pop();
+            }
+            ConfigField::Institution => {
+                self.config.identity.institution.pop();
+            }
+            ConfigField::Phone => {
+                self.config.identity.phone.pop();
+            }
+            ConfigField::Emails => self.modify_emails(' ', true),
+            ConfigField::SmtpUser => {
+                self.config.smtp_username.pop();
+            }
+            ConfigField::SmtpPass => {
+                self.config.smtp_app_password.pop();
+            }
+            ConfigField::WorkerUrl => {
+                self.config.worker_url.pop();
+            }
+        }
+    }
+
+    fn modify_emails(&mut self, c: char, is_backspace: bool) {
+        let mut str_rep = self.config.identity.emails.join(", ");
+
+        if is_backspace {
+            str_rep.pop();
+        } else {
+            str_rep.push(c);
+        }
+
+        self.config.identity.emails = if str_rep.is_empty() {
+            Vec::new()
+        } else {
+            str_rep.split(',').map(|s| s.trim().to_string()).collect()
+        };
     }
 }
