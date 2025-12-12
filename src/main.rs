@@ -5,12 +5,12 @@ mod enums;
 mod handler;
 mod mailer;
 mod models;
+mod storage;
 mod tui;
 mod ui;
 
 use anyhow::Result;
 use app::App;
-use config::AppConfig;
 use crossterm::event::{self, Event, KeyEventKind};
 use enums::Notification;
 use handler::Action;
@@ -18,12 +18,11 @@ use tokio::sync::mpsc;
 
 #[tokio::main]
 async fn main() -> Result<()> {
-    let config = AppConfig::load().unwrap_or_default();
     let mut terminal = tui::init()?;
-    let mut app = App::new(config);
+    let mut app = App::new();
 
-    // Async Channels
     let (tx, mut rx) = mpsc::channel(10);
+
     let tick_rate = std::time::Duration::from_millis(250);
     let tx_tick = tx.clone();
     tokio::spawn(async move {
@@ -35,19 +34,16 @@ async fn main() -> Result<()> {
         }
     });
 
-    // Main Event Loop
     loop {
         terminal.draw(|frame| ui::draw(frame, &app))?;
 
-        // Handle Async Actions (Background Tasks)
         if let Ok(action) = rx.try_recv() {
             match action {
-                Action::RenderTick => {} // Triggers redraw via loop
+                Action::RenderTick => {}
                 Action::EmailSent => {
                     app.set_notification(Notification::Success(
                         "Email sent successfully!".to_string(),
                     ));
-                    app.draft = models::EmailDraft::default();
                 }
                 Action::EmailFailed(err) => {
                     app.set_notification(Notification::Error(format!("Sending failed: {}", err)));
@@ -55,7 +51,6 @@ async fn main() -> Result<()> {
             }
         }
 
-        // Handle User Input
         if event::poll(std::time::Duration::from_millis(10))? {
             if let Event::Key(key) = event::read()? {
                 if key.kind == KeyEventKind::Press {
@@ -63,7 +58,11 @@ async fn main() -> Result<()> {
                         app.clear_notification();
                     }
 
-                    handler::handle_key_events(key, &mut app, tx.clone()).await;
+                    let should_clear = handler::handle_key_events(key, &mut app, tx.clone()).await;
+
+                    if should_clear {
+                        terminal.clear()?;
+                    }
 
                     if app.should_quit {
                         break;

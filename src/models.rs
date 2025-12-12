@@ -31,4 +31,24 @@ pub struct UserIdentity {
     pub institution: String,
     pub phone: String,
     pub emails: Vec<String>,
+    #[serde(default = "default_color")]
+    pub footer_color: String,
+}
+
+fn default_color() -> String {
+    "#179299".to_string()
+}
+
+impl Default for UserIdentity {
+    fn default() -> Self {
+        Self {
+            name: String::new(),
+            role: String::new(),
+            department: String::new(),
+            institution: String::new(),
+            phone: String::new(),
+            emails: Vec::new(),
+            footer_color: default_color(),
+        }
+    }
 }

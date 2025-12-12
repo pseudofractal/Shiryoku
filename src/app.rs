@@ -1,7 +1,7 @@
 use crate::config::AppConfig;
-pub use crate::enums::*;
 use crate::enums::{ComposeField, ConfigField, CurrentPage, InputMode, Notification};
 use crate::models::EmailDraft;
+use crate::storage::Storage;
 
 pub struct App {
     pub should_quit: bool,
@@ -19,20 +19,24 @@ pub struct App {
 }
 
 impl App {
-    pub fn new(config: AppConfig) -> Self {
+    pub fn new() -> Self {
+        let config = Storage::load_config().unwrap_or_default();
+        let draft = Storage::load_draft().unwrap_or_default();
+
         Self {
             should_quit: false,
             input_mode: InputMode::Normal,
             current_page: CurrentPage::Compose,
             notification: None,
             compose_field: ComposeField::Recipient,
-            draft: EmailDraft::default(),
+            draft,
             config_field: ConfigField::Name,
             config,
         }
     }
 
     pub fn quit(&mut self) {
+        let _ = Storage::save_draft(&self.draft);
         self.should_quit = true;
     }
 
@@ -71,7 +75,8 @@ impl App {
         self.compose_field = match self.compose_field {
             ComposeField::Recipient => ComposeField::Subject,
             ComposeField::Subject => ComposeField::Body,
-            ComposeField::Body => ComposeField::Recipient,
+            ComposeField::Body => ComposeField::SendButton,
+            ComposeField::SendButton => ComposeField::Recipient,
         };
     }
 
@@ -82,7 +87,8 @@ impl App {
             ConfigField::Department => ConfigField::Institution,
             ConfigField::Institution => ConfigField::Phone,
             ConfigField::Phone => ConfigField::Emails,
-            ConfigField::Emails => ConfigField::SmtpUser,
+            ConfigField::Emails => ConfigField::FooterColor,
+            ConfigField::FooterColor => ConfigField::SmtpUser,
             ConfigField::SmtpUser => ConfigField::SmtpPass,
             ConfigField::SmtpPass => ConfigField::WorkerUrl,
             ConfigField::WorkerUrl => ConfigField::Name,
@@ -107,7 +113,8 @@ impl App {
         match self.compose_field {
             ComposeField::Recipient => self.draft.recipient.push(c),
             ComposeField::Subject => self.draft.subject.push(c),
-            ComposeField::Body => self.draft.body.push(c),
+            ComposeField::Body => {}
+            ComposeField::SendButton => {}
         }
     }
 
@@ -119,9 +126,8 @@ impl App {
             ComposeField::Subject => {
                 self.draft.subject.pop();
             }
-            ComposeField::Body => {
-                self.draft.body.pop();
-            }
+            ComposeField::Body => {}
+            ComposeField::SendButton => {}
         }
     }
 
@@ -133,6 +139,7 @@ impl App {
             ConfigField::Institution => self.config.identity.institution.push(c),
             ConfigField::Phone => self.config.identity.phone.push(c),
             ConfigField::Emails => self.modify_emails(c, false),
+            ConfigField::FooterColor => self.config.identity.footer_color.push(c),
             ConfigField::SmtpUser => self.config.smtp_username.push(c),
             ConfigField::SmtpPass => self.config.smtp_app_password.push(c),
             ConfigField::WorkerUrl => self.config.worker_url.push(c),
@@ -157,6 +164,9 @@ impl App {
                 self.config.identity.phone.pop();
             }
             ConfigField::Emails => self.modify_emails(' ', true),
+            ConfigField::FooterColor => {
+                self.config.identity.footer_color.pop();
+            }
             ConfigField::SmtpUser => {
                 self.config.smtp_username.pop();
             }

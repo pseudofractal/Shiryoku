@@ -48,9 +48,10 @@ fn draw_compose(frame: &mut Frame, app: &App, area: Rect) {
     let layout = Layout::default()
         .direction(Direction::Vertical)
         .constraints([
-            Constraint::Length(3),
-            Constraint::Length(3),
-            Constraint::Min(5),
+            Constraint::Length(3), // To
+            Constraint::Length(3), // Subject
+            Constraint::Min(5),    // Body
+            Constraint::Length(3), // Send Button
         ])
         .split(area);
 
@@ -60,6 +61,7 @@ fn draw_compose(frame: &mut Frame, app: &App, area: Rect) {
             ComposeField::Recipient,
             ComposeField::Subject,
             ComposeField::Body,
+            ComposeField::SendButton,
         ],
         |f| app.compose_field == *f,
     );
@@ -72,17 +74,35 @@ fn draw_compose(frame: &mut Frame, app: &App, area: Rect) {
         .block(Block::default().borders(Borders::ALL).title("Subject"))
         .style(styles[1]);
 
-    let body = Paragraph::new(app.draft.body.as_str())
+    let body_content = if app.draft.body.is_empty() {
+        "Press <Enter> to open external editor...".to_string()
+    } else {
+        app.draft.body.clone()
+    };
+
+    let body = Paragraph::new(body_content)
         .block(
             Block::default()
                 .borders(Borders::ALL)
-                .title("Body (Markdown)"),
+                .title("Body (Markdown) - Press Enter to Edit"),
         )
         .style(styles[2]);
+
+    let button_text = if app.compose_field == ComposeField::SendButton {
+        "> [ SEND EMAIL ] <"
+    } else {
+        "  [ SEND EMAIL ]  "
+    };
+
+    let send_btn = Paragraph::new(button_text)
+        .alignment(ratatui::layout::Alignment::Center)
+        .block(Block::default().borders(Borders::ALL))
+        .style(styles[3]);
 
     frame.render_widget(recipient, layout[0]);
     frame.render_widget(subject, layout[1]);
     frame.render_widget(body, layout[2]);
+    frame.render_widget(send_btn, layout[3]);
 }
 
 fn draw_config(frame: &mut Frame, app: &App, area: Rect) {
@@ -95,6 +115,7 @@ fn draw_config(frame: &mut Frame, app: &App, area: Rect) {
             Constraint::Length(3), // Institution
             Constraint::Length(3), // Phone
             Constraint::Length(3), // Emails
+            Constraint::Length(3), // Color
             Constraint::Length(3), // SMTP User
             Constraint::Length(3), // SMTP Pass
             Constraint::Length(3), // Worker URL
@@ -108,6 +129,7 @@ fn draw_config(frame: &mut Frame, app: &App, area: Rect) {
         ConfigField::Institution,
         ConfigField::Phone,
         ConfigField::Emails,
+        ConfigField::FooterColor,
         ConfigField::SmtpUser,
         ConfigField::SmtpPass,
         ConfigField::WorkerUrl,
@@ -134,11 +156,18 @@ fn draw_config(frame: &mut Frame, app: &App, area: Rect) {
     render_input(4, "Phone", &app.config.identity.phone, false);
 
     let email_str = app.config.identity.emails.join(", ");
-    render_input(5, "Emails (comma separated)", &email_str, false);
+    render_input(5, "Emails", &email_str, false);
 
-    render_input(6, "SMTP Email", &app.config.smtp_username, false);
-    render_input(7, "SMTP App Password", &app.config.smtp_app_password, true);
-    render_input(8, "Worker URL", &app.config.worker_url, false);
+    render_input(
+        6,
+        "Footer Color (Hex)",
+        &app.config.identity.footer_color,
+        false,
+    );
+
+    render_input(7, "SMTP Email", &app.config.smtp_username, false);
+    render_input(8, "SMTP App Password", &app.config.smtp_app_password, true);
+    render_input(9, "Worker URL", &app.config.worker_url, false);
 }
 
 fn draw_status_bar(frame: &mut Frame, app: &App, area: Rect) {

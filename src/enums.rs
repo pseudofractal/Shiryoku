@@ -18,6 +18,7 @@ pub enum ComposeField {
     Recipient,
     Subject,
     Body,
+    SendButton,
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -29,6 +30,7 @@ pub enum ConfigField {
     Institution,
     Phone,
     Emails,
+    FooterColor,
     SmtpUser,
     SmtpPass,
     WorkerUrl,
