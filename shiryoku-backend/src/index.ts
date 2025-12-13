@@ -126,8 +126,7 @@ export default {
     return new Response('Not Found', { status: 404 });
   },
 
-  // --- CRON HANDLER ---
-  async scheduled(event: ScheduledEvent, env: Env, ctx: ExecutionContext) {
+  async scheduled(_event: ScheduledEvent, env: Env, _ctx: ExecutionContext) {
     const now = new Date().toISOString();
     const { results } = await env.DB.prepare(
       `
@@ -165,7 +164,7 @@ async function fileToBase64(file: File): Promise<string> {
 }
 
 // --- SMTP CLIENT ---
-// Gemini is so good, omg!
+// Gemini is so good!
 
 async function sendSmtpEmail(email: any, attachments: any[]) {
   const socket = connect('smtp.gmail.com:465', {
@@ -177,21 +176,19 @@ async function sendSmtpEmail(email: any, attachments: any[]) {
   const reader = socket.readable.getReader();
   const encoder = new TextEncoder();
   const decoder = new TextDecoder();
-
   let buffer = '';
 
-  const writeLine = async (cmd: string) => {
-    await writer.write(encoder.encode(cmd + '\r\n'));
-  };
-
-  // Reads strictly line-by-line, preserving the buffer for the next read
-  const readNextLine = async (): Promise<string> => {
+  // Helper to read SMTP responses
+  const readUntilCode = async (code: string) => {
     while (true) {
       const idx = buffer.indexOf('\n');
       if (idx !== -1) {
-        const line = buffer.slice(0, idx + 1); // Keep \n for logging if needed, or trim later
+        const line = buffer.slice(0, idx + 1);
         buffer = buffer.slice(idx + 1);
-        return line.trim();
+        const text = line.trim();
+        if (text.startsWith(`${code} `)) return text;
+        if (!text.startsWith(`${code}-`)) throw new Error(`SMTP Error: Expected ${code}, got: ${text}`);
+        continue;
       }
       const { value, done } = await reader.read();
       if (done) throw new Error('Connection closed unexpectedly');
@@ -199,88 +196,89 @@ async function sendSmtpEmail(email: any, attachments: any[]) {
     }
   };
 
-  // Reads lines until it finds "Code[space]", handling "Code-" (multi-line)
-  const readUntilCode = async (code: string) => {
-    while (true) {
-      const line = await readNextLine();
-      // SMTP format: "250-Data" (continue) vs "250 OK" (end)
-      if (line.startsWith(`${code} `)) return line;
-      if (!line.startsWith(`${code}-`)) throw new Error(`SMTP Error: Expected ${code}, got: ${line}`);
-    }
+  const writeCmd = async (cmd: string) => {
+    await writer.write(encoder.encode(cmd + '\r\n'));
   };
 
-  // 1. Handshake
-  // Server sends "220 smtp.gmail.com..."
+  // Handshake
   await readUntilCode('220');
-
-  await writeLine('EHLO cloudflare-worker');
-  // Server sends multi-line 250 capabilities
+  await writeCmd('EHLO cloudflare-worker');
   await readUntilCode('250');
 
-  // 2. Auth
-  await writeLine('AUTH LOGIN');
-  await readUntilCode('334'); // 334 VXNlcm5hbWU6 (Username:)
+  // Auth
+  await writeCmd('AUTH LOGIN');
+  await readUntilCode('334');
+  await writeCmd(btoa(email.smtp_username));
+  await readUntilCode('334');
+  await writeCmd(btoa(email.smtp_password));
+  await readUntilCode('235');
 
-  await writeLine(btoa(email.smtp_username));
-  await readUntilCode('334'); // 334 UGFzc3dvcmQ6 (Password:)
-
-  await writeLine(btoa(email.smtp_password));
-  await readUntilCode('235'); // 235 2.7.0 Accepted
-
-  // 3. Envelope
-  await writeLine(`MAIL FROM: <${email.smtp_username}>`);
+  // Envelope
+  await writeCmd(`MAIL FROM: <${email.smtp_username}>`);
   await readUntilCode('250');
-
-  await writeLine(`RCPT TO: <${email.recipient}>`);
+  await writeCmd(`RCPT TO: <${email.recipient}>`);
   await readUntilCode('250');
+  await writeCmd('DATA');
+  await readUntilCode('354');
 
-  await writeLine('DATA');
-  await readUntilCode('354'); // 354  Go ahead...
-
-  // 4. Data
+  // DATA STREAMING
   const boundary = `----=_Part_${Date.now()}`;
   const rawEmail = buildMimeMessage(email, attachments, boundary);
 
-  await writeLine(rawEmail);
-  await writeLine('.');
-  await readUntilCode('250'); // 250 2.0.0 OK ...
+  // Stream the email body in 16KB chunks to prevent socket timeout/truncation
+  const chunkSize = 16384;
+  for (let i = 0; i < rawEmail.length; i += chunkSize) {
+    const chunk = rawEmail.substring(i, i + chunkSize);
+    await writer.write(encoder.encode(chunk));
+  }
 
-  // 5. Quit
-  await writeLine('QUIT');
-  // Optional: await readUntilCode('221');
+  // End the message strictly
+  await writeCmd('.');
+  await readUntilCode('250');
 
+  // Cleanup
+  await writeCmd('QUIT');
   await writer.close();
 }
 
 function buildMimeMessage(email: any, attachments: any[], boundary: string): string {
   const crlf = '\r\n';
+
+  // Sanitize Body Text
+  const sanitize = (text: string) => (text || '').replace(/\r?\n/g, crlf).replace(/^\./gm, '..');
+
   let msg = '';
 
+  // Headers
   msg += `From: ${email.smtp_username}${crlf}`;
   msg += `To: ${email.recipient}${crlf}`;
   msg += `Subject: ${email.subject}${crlf}`;
   msg += `MIME-Version: 1.0${crlf}`;
   msg += `Content-Type: multipart/mixed; boundary="${boundary}"${crlf}${crlf}`;
 
+  // Body Section (Multipart/Alternative)
   const altBoundary = `alt_${boundary}`;
   msg += `--${boundary}${crlf}`;
   msg += `Content-Type: multipart/alternative; boundary="${altBoundary}"${crlf}${crlf}`;
 
+  // Plain Text
   msg += `--${altBoundary}${crlf}`;
   msg += `Content-Type: text/plain; charset=utf-8${crlf}`;
   msg += `Content-Transfer-Encoding: 7bit${crlf}${crlf}`;
-  msg += `${email.plain_body}${crlf}${crlf}`;
+  msg += `${sanitize(email.plain_body)}${crlf}${crlf}`;
 
+  // HTML
   msg += `--${altBoundary}${crlf}`;
   msg += `Content-Type: text/html; charset=utf-8${crlf}`;
   msg += `Content-Transfer-Encoding: 7bit${crlf}${crlf}`;
-  msg += `${email.html_body}${crlf}${crlf}`;
+  msg += `${sanitize(email.html_body)}${crlf}${crlf}`;
 
-  msg += `--${altBoundary}--${crlf}${crlf}`;
+  msg += `--${altBoundary}--${crlf}`; // End of Body Part
 
+  // Attachments
   for (const att of attachments) {
     msg += `--${boundary}${crlf}`;
-    msg += `Content-Type: ${att.content_type}; name="${att.filename}"${crlf}`;
+    msg += `Content-Type: ${att.content_type || 'application/octet-stream'}; name="${att.filename}"${crlf}`;
     msg += `Content-Transfer-Encoding: base64${crlf}`;
 
     if (att.is_inline && att.cid) {
@@ -289,15 +287,18 @@ function buildMimeMessage(email: any, attachments: any[], boundary: string): str
     } else {
       msg += `Content-Disposition: attachment; filename="${att.filename}"${crlf}`;
     }
+
     msg += `${crlf}`;
 
+    // Insert Base64 Data
     const raw = att.data;
     for (let i = 0; i < raw.length; i += 76) {
       msg += raw.substring(i, i + 76) + crlf;
     }
-    msg += `${crlf}`;
   }
 
+  // Final Footer
   msg += `--${boundary}--${crlf}`;
+
   return msg;
 }
