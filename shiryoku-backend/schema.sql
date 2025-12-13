@@ -20,6 +20,7 @@ CREATE TABLE scheduled_emails (
     scheduled_at TEXT NOT NULL,
     smtp_username TEXT NOT NULL,
     smtp_password TEXT NOT NULL,
+    sender_name TEXT,
     status TEXT DEFAULT 'pending',
     created_at TEXT DEFAULT (datetime('now'))
 );

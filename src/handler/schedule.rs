@@ -62,6 +62,7 @@ async fn handle_normal_mode(key: KeyEvent, app: &mut App, tx: mpsc::Sender<Actio
               utc_target,
               smtp_user,
               smtp_pass,
+              identity_clone.name,
             )
             .await
             {

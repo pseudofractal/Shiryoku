@@ -81,17 +81,18 @@ export default {
         const scheduled_at = formData.get('scheduled_at') as string;
         const smtp_username = formData.get('smtp_username') as string;
         const smtp_password = formData.get('smtp_password') as string;
+        const sender_name = formData.get('sender_name') as string;
 
         if (!recipient || !scheduled_at) return new Response('Missing fields', { status: 400 });
 
         const { results } = await env.DB.prepare(
           `
-            INSERT INTO scheduled_emails (recipient, subject, html_body, plain_body, scheduled_at, smtp_username, smtp_password)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO scheduled_emails (recipient, subject, html_body, plain_body, scheduled_at, smtp_username, smtp_password, sender_name)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
             RETURNING id
         `,
         )
-          .bind(recipient, subject, html_body, plain_body, scheduled_at, smtp_username, smtp_password)
+          .bind(recipient, subject, html_body, plain_body, scheduled_at, smtp_username, smtp_password, sender_name)
           .run();
 
         const emailId = results[0].id;
@@ -250,7 +251,11 @@ function buildMimeMessage(email: any, attachments: any[], boundary: string): str
   let msg = '';
 
   // Headers
-  msg += `From: ${email.smtp_username}${crlf}`;
+  let fromHeader = email.smtp_username;
+  if (email.sender_name) {
+    fromHeader = `"${email.sender_name}" <${email.smtp_username}>`;
+  }
+  msg += `From: ${fromHeader}${crlf}`;
   msg += `To: ${email.recipient}${crlf}`;
   msg += `Subject: ${email.subject}${crlf}`;
   msg += `MIME-Version: 1.0${crlf}`;

@@ -72,6 +72,7 @@ pub async fn schedule_email(
   scheduled_at: chrono::DateTime<chrono::Utc>,
   smtp_username: String,
   smtp_password: String,
+  sender_name: String,
 ) -> Result<()> {
   let client = Client::new();
   let url = format!("{}/api/schedule?secret={}", worker_url, api_secret);
@@ -83,7 +84,8 @@ pub async fn schedule_email(
     .text("plain_body", compiled.plain_body)
     .text("scheduled_at", scheduled_at.to_rfc3339())
     .text("smtp_username", smtp_username)
-    .text("smtp_password", smtp_password);
+    .text("smtp_password", smtp_password)
+    .text("sender_name", sender_name);
 
   for path in compiled.attachments {
     if let Ok(bytes) = fs::read(&path).await {

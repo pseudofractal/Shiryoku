@@ -15,12 +15,17 @@ use std::fs;
 pub async fn send_email(config: AppConfig, draft: EmailDraft) -> Result<()> {
   let compiled = compiler::compile(&draft, &config.identity, &config.worker_url);
 
+  let sender_header = if config.identity.name.is_empty() {
+      config.smtp_username.clone()
+  } else {
+      format!("\"{}\" <{}>", config.identity.name, config.smtp_username)
+  };
+
   let email_builder = Message::builder()
     .from(
-      config
-        .smtp_username
+      sender_header
         .parse()
-        .context("Invalid sender email")?,
+        .context("Invalid sender format (Name <email>)")?,
     )
     .to(draft.recipient.parse().context("Invalid recipient email")?)
     .subject(draft.subject);
