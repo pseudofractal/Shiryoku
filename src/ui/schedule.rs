@@ -1,7 +1,6 @@
 use crate::app::App;
 use crate::enums::{InputMode, ScheduleField};
-use chrono::{Local, NaiveDate, NaiveTime, TimeZone, Utc};
-use chrono_tz::OffsetComponents; // Fixed: Required for base_utc_offset
+use chrono::{Local, NaiveDate, NaiveTime, TimeZone};
 use ratatui::{
   Frame,
   layout::{Alignment, Constraint, Direction, Layout, Rect},
@@ -11,13 +10,12 @@ use ratatui::{
 };
 
 pub fn draw_schedule_page(frame: &mut Frame, app: &App, area: Rect) {
-  // 1. MAIN LAYOUT (Header -> Body -> Footer)
   let chunks = Layout::default()
     .direction(Direction::Vertical)
     .constraints([
-      Constraint::Length(7), // HUD (Stats)
-      Constraint::Min(0),    // Main Controls (Split Left/Right)
-      Constraint::Length(3), // Footer (Lock Button)
+      Constraint::Length(7),
+      Constraint::Min(0),
+      Constraint::Length(3),
     ])
     .split(area);
 
@@ -26,24 +24,19 @@ pub fn draw_schedule_page(frame: &mut Frame, app: &App, area: Rect) {
   draw_footer(frame, app, chunks[2]);
 }
 
-// --- TOP HUD: Time Comparison ---
 fn draw_hud(frame: &mut Frame, app: &App, area: Rect) {
   let layout = Layout::default()
     .direction(Direction::Horizontal)
     .constraints([
       Constraint::Percentage(33),
-      Constraint::Percentage(34), // Middle is slightly wider for "Diff" arrow
+      Constraint::Percentage(34),
       Constraint::Percentage(33),
     ])
     .split(area);
 
-  let system_tz = Local::now().format("%Z").to_string();
-
-  // Attempt to calculate the target time to show stats
-  let (target_dt_opt, offset_str) = calculate_target(app);
-
-  // 1. LEFT: YOUR LOCATION
   let local_now = Local::now();
+  let target_dt_opt = calculate_target_dt(app);
+
   let left_text = vec![
     Line::from("📍 YOUR LOCATION"),
     Line::from(Span::styled(
@@ -51,34 +44,41 @@ fn draw_hud(frame: &mut Frame, app: &App, area: Rect) {
       Style::default()
         .fg(Color::Cyan)
         .add_modifier(Modifier::BOLD)
-        // Fixed: Upper case REVERSED
         .add_modifier(Modifier::REVERSED),
     )),
     Line::from(local_now.format("%d %b %Y").to_string()),
-    Line::from(format!("Timezone: {}", system_tz)),
+    Line::from(format!("Zone: {}", local_now.format("%Z (%z)"))),
   ];
-  let left_block = Block::default()
-    .borders(Borders::ALL)
-    .style(Style::default().fg(Color::DarkGray));
+
   frame.render_widget(
     Paragraph::new(left_text)
-      .block(left_block)
+      .block(
+        Block::default()
+          .borders(Borders::ALL)
+          .style(Style::default().fg(Color::DarkGray)),
+      )
       .alignment(Alignment::Center),
     layout[0],
   );
 
-  // 2. MIDDLE: THE GAP (Time Difference)
-  let diff_text = if let Some(target_dt) = target_dt_opt {
-    // Calculate difference relative to the Target's timezone interpretation of "now"
-    let diff = target_dt.signed_duration_since(local_now.with_timezone(&target_dt.timezone()));
-    let hours = diff.num_hours();
-    let mins = (diff.num_minutes() % 60).abs(); // abs() to ensure minutes don't show negative if hours are negative
+  let diff_text = if let Some(target) = target_dt_opt {
+    let now_utc = local_now.timestamp();
+    let target_utc = target.timestamp();
+    let diff_secs = target_utc - now_utc;
 
-    let color = if hours >= 0 { Color::Green } else { Color::Red };
-    let sign = if hours >= 0 { "+" } else { "" };
+    let sign = if diff_secs >= 0 { "+" } else { "-" };
+    let abs_secs = diff_secs.abs();
+    let hours = abs_secs / 3600;
+    let mins = (abs_secs % 3600) / 60;
+
+    let color = if diff_secs >= 0 {
+      Color::Green
+    } else {
+      Color::Red
+    };
 
     vec![
-      Line::from("⏱ TIME DIFFERENCE"),
+      Line::from("⏱  COUNTDOWN"),
       Line::from(Span::styled(
         format!("{}{:02}h {:02}m", sign, hours, mins),
         Style::default().fg(color).add_modifier(Modifier::BOLD),
@@ -89,28 +89,25 @@ fn draw_hud(frame: &mut Frame, app: &App, area: Rect) {
     vec![Line::from("Calculating..."), Line::from("--")]
   };
 
-  let mid_block = Block::default().borders(Borders::ALL).title(" DELTA ");
   frame.render_widget(
     Paragraph::new(diff_text)
-      .block(mid_block)
+      .block(Block::default().borders(Borders::ALL).title(" DELTA "))
       .alignment(Alignment::Center),
     layout[1],
   );
 
-  // 3. RIGHT: TARGET LOCATION
-  let right_content = if let Some(target_dt) = target_dt_opt {
+  let right_content = if let Some(target) = target_dt_opt {
     vec![
       Line::from("🎯 TARGET DELIVERY"),
       Line::from(Span::styled(
-        target_dt.format("%H:%M").to_string(),
+        target.format("%H:%M").to_string(),
         Style::default()
           .fg(Color::Yellow)
           .add_modifier(Modifier::BOLD)
-          // Fixed: Upper case REVERSED
           .add_modifier(Modifier::REVERSED),
       )),
-      Line::from(target_dt.format("%d %b %Y").to_string()),
-      Line::from(format!("Offset: {}", offset_str)),
+      Line::from(target.format("%d %b %Y").to_string()),
+      Line::from(format!("Zone: {}", target.format("%Z (%z)"))),
     ]
   } else {
     vec![
@@ -120,47 +117,41 @@ fn draw_hud(frame: &mut Frame, app: &App, area: Rect) {
     ]
   };
 
-  let right_block = Block::default()
-    .borders(Borders::ALL)
-    .style(Style::default().fg(Color::White));
   frame.render_widget(
     Paragraph::new(right_content)
-      .block(right_block)
+      .block(
+        Block::default()
+          .borders(Borders::ALL)
+          .style(Style::default().fg(Color::White)),
+      )
       .alignment(Alignment::Center),
     layout[2],
   );
 }
 
-// --- MAIN DECK: Inputs & List ---
 fn draw_main_deck(frame: &mut Frame, app: &App, area: Rect) {
   let layout = Layout::default()
     .direction(Direction::Horizontal)
-    .constraints([
-      Constraint::Percentage(40), // Inputs
-      Constraint::Percentage(60), // Search/List
-    ])
+    .constraints([Constraint::Percentage(40), Constraint::Percentage(60)])
     .split(area);
 
-  // -- LEFT COL: Date/Time Inputs --
   let col1 = Layout::default()
     .direction(Direction::Vertical)
     .constraints([
-      Constraint::Length(3), // Label
-      Constraint::Length(3), // Day/Month/Year
-      Constraint::Length(1), // Spacer
-      Constraint::Length(3), // Label
-      Constraint::Length(3), // Hr/Min/Sec
-      Constraint::Min(0),    // Empty
+      Constraint::Length(3),
+      Constraint::Length(3),
+      Constraint::Length(1),
+      Constraint::Length(3),
+      Constraint::Length(3),
+      Constraint::Min(0),
     ])
     .split(layout[0]);
 
-  // Date Header
   frame.render_widget(
     Paragraph::new("📅  SET DATE").style(Style::default().add_modifier(Modifier::BOLD)),
     col1[0],
   );
 
-  // Date Row (Split 3 ways)
   let date_row = Layout::default()
     .direction(Direction::Horizontal)
     .constraints([
@@ -195,13 +186,11 @@ fn draw_main_deck(frame: &mut Frame, app: &App, area: Rect) {
     date_row[2],
   );
 
-  // Time Header
   frame.render_widget(
     Paragraph::new("⏰  SET TIME").style(Style::default().add_modifier(Modifier::BOLD)),
     col1[3],
   );
 
-  // Time Row (Split 3 ways)
   let time_row = Layout::default()
     .direction(Direction::Horizontal)
     .constraints([
@@ -236,16 +225,11 @@ fn draw_main_deck(frame: &mut Frame, app: &App, area: Rect) {
     time_row[2],
   );
 
-  // -- RIGHT COL: Timezone Search --
   let col2 = Layout::default()
     .direction(Direction::Vertical)
-    .constraints([
-      Constraint::Length(3), // Search Input
-      Constraint::Min(0),    // List
-    ])
+    .constraints([Constraint::Length(3), Constraint::Min(0)])
     .split(layout[1]);
 
-  // Search Box
   let tz_active = app.schedule.active_field == ScheduleField::Timezone;
   let tz_style = get_style(app, tz_active);
   frame.render_widget(
@@ -259,12 +243,11 @@ fn draw_main_deck(frame: &mut Frame, app: &App, area: Rect) {
     col2[0],
   );
 
-  // List
   let items: Vec<ListItem> = app
     .schedule
     .filtered_timezones
     .iter()
-    .take(50) // Show more items since we have space
+    .take(50)
     .enumerate()
     .map(|(i, tz)| {
       let is_selected = i == app.schedule.selected_timezone_idx;
@@ -276,7 +259,6 @@ fn draw_main_deck(frame: &mut Frame, app: &App, area: Rect) {
       } else {
         Style::default().fg(Color::DarkGray)
       };
-      // Add a little arrow for the selected one
       let prefix = if is_selected { "> " } else { "  " };
       ListItem::new(format!("{}{}", prefix, tz)).style(style)
     })
@@ -295,16 +277,16 @@ fn draw_main_deck(frame: &mut Frame, app: &App, area: Rect) {
 fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
   let layout = Layout::default()
     .direction(Direction::Horizontal)
-    .constraints([
-      Constraint::Percentage(70), // Verification Text
-      Constraint::Percentage(30), // Lock Button
-    ])
+    .constraints([Constraint::Percentage(70), Constraint::Percentage(30)])
     .split(area);
 
-  let (target_opt, _) = calculate_target(app);
+  let target_opt = calculate_target_dt(app);
   let verify_text = if let Some(t) = target_opt {
-    let utc = t.with_timezone(&Utc);
-    format!(" ✅ Verified: {} (UTC)", utc.format("%Y-%m-%d %H:%M:%S"))
+    format!(
+      " ✅ Verified: {} ({})",
+      t.format("%Y-%m-%d %H:%M:%S"),
+      t.format("%Z")
+    )
   } else {
     " ❌ Incomplete or Invalid Configuration".to_string()
   };
@@ -331,8 +313,6 @@ fn draw_footer(frame: &mut Frame, app: &App, area: Rect) {
     layout[1],
   );
 }
-
-// --- HELPER FUNCTIONS ---
 
 fn render_input(
   frame: &mut Frame,
@@ -365,39 +345,24 @@ fn get_style(app: &App, is_active: bool) -> Style {
   }
 }
 
-// Logic to try and parse the messy UI state into a real DateTime
-fn calculate_target(app: &App) -> (Option<chrono::DateTime<chrono_tz::Tz>>, String) {
-  let day = app.schedule.day.parse::<u32>().unwrap_or(0);
-  let month = app.schedule.month.parse::<u32>().unwrap_or(0);
-  let year = app.schedule.year.parse::<i32>().unwrap_or(0);
-  let hour = app.schedule.hour.parse::<u32>().unwrap_or(0);
-  let min = app.schedule.minute.parse::<u32>().unwrap_or(0);
-  let sec = app.schedule.second.parse::<u32>().unwrap_or(0);
+fn calculate_target_dt(app: &App) -> Option<chrono::DateTime<chrono_tz::Tz>> {
+  let day = app.schedule.day.parse::<u32>().ok()?;
+  let month = app.schedule.month.parse::<u32>().ok()?;
+  let year = app.schedule.year.parse::<i32>().ok()?;
+  let hour = app.schedule.hour.parse::<u32>().ok()?;
+  let min = app.schedule.minute.parse::<u32>().ok()?;
+  let sec = app.schedule.second.parse::<u32>().ok()?;
 
-  let naive_date = NaiveDate::from_ymd_opt(year, month, day);
-  let naive_time = NaiveTime::from_hms_opt(hour, min, sec);
+  let naive_date = NaiveDate::from_ymd_opt(year, month, day)?;
+  let naive_time = NaiveTime::from_hms_opt(hour, min, sec)?;
 
-  // Attempt to parse the timezone string into a Tz struct
-  let parsed_tz = app.schedule.timezone_input.parse::<chrono_tz::Tz>().ok();
+  let parsed_tz = app.schedule.timezone_input.parse::<chrono_tz::Tz>().ok()?;
 
-  if let (Some(d), Some(t), Some(tz)) = (naive_date, naive_time, parsed_tz) {
-    let local_dt = d.and_time(t);
-    let target = match tz.from_local_datetime(&local_dt) {
-      chrono::LocalResult::Single(dt) => Some(dt),
-      chrono::LocalResult::Ambiguous(dt1, _) => Some(dt1),
-      _ => None,
-    };
+  let local_dt = naive_date.and_time(naive_time);
 
-    if let Some(t) = target {
-      // Fixed: use dst_offset() or base_utc_offset() via OffsetComponents trait
-      let offset_secs = t.offset().base_utc_offset().num_seconds();
-      let sign = if offset_secs >= 0 { "+" } else { "-" };
-      let abs = offset_secs.abs();
-      let h = abs / 3600;
-      let m = (abs % 3600) / 60;
-      return (Some(t), format!("UTC{}{:02}:{:02}", sign, h, m));
-    }
+  match parsed_tz.from_local_datetime(&local_dt) {
+    chrono::LocalResult::Single(dt) => Some(dt),
+    chrono::LocalResult::Ambiguous(dt1, _) => Some(dt1),
+    _ => None,
   }
-
-  (None, "UTC?".to_string())
 }

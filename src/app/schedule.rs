@@ -1,5 +1,6 @@
 use crate::enums::ScheduleField;
-use chrono_tz::TZ_VARIANTS;
+use chrono::{DateTime, NaiveDate, NaiveTime, TimeZone, Utc};
+use chrono_tz::{TZ_VARIANTS, Tz};
 
 pub struct ScheduleState {
   pub day: String,
@@ -174,6 +175,27 @@ impl ScheduleState {
         ScheduleField::Timezone => ScheduleField::Second,
         ScheduleField::Submit => ScheduleField::Timezone,
       };
+    }
+  }
+
+  pub fn calculate_utc_target(&self) -> Option<DateTime<Utc>> {
+    let day = self.day.parse::<u32>().ok()?;
+    let month = self.month.parse::<u32>().ok()?;
+    let year = self.year.parse::<i32>().ok()?;
+    let hour = self.hour.parse::<u32>().ok()?;
+    let min = self.minute.parse::<u32>().ok()?;
+    let sec = self.second.parse::<u32>().ok()?;
+
+    let naive_date = NaiveDate::from_ymd_opt(year, month, day)?;
+    let naive_time = NaiveTime::from_hms_opt(hour, min, sec)?;
+    let parsed_tz = self.timezone_input.parse::<Tz>().ok()?;
+
+    let local_dt = naive_date.and_time(naive_time);
+
+    match parsed_tz.from_local_datetime(&local_dt) {
+      chrono::LocalResult::Single(dt) => Some(dt.with_timezone(&Utc)),
+      chrono::LocalResult::Ambiguous(dt1, _) => Some(dt1.with_timezone(&Utc)),
+      _ => None,
     }
   }
 }
