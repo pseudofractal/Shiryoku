@@ -1,44 +1,46 @@
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum InputMode {
-    #[default]
-    Normal,
-    Editing,
+  #[default]
+  Normal,
+  Editing,
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum CurrentPage {
-    #[default]
-    Compose,
-    Config,
+  #[default]
+  Compose,
+  Config,
+  Dashboard,
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum ComposeField {
-    #[default]
-    Recipient,
-    Subject,
-    Body,
-    SendButton,
+  #[default]
+  Recipient,
+  Subject,
+  Body,
+  SendButton,
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
 pub enum ConfigField {
-    #[default]
-    Name,
-    Role,
-    Department,
-    Institution,
-    Phone,
-    Emails,
-    FooterColor,
-    SmtpUser,
-    SmtpPass,
-    WorkerUrl,
+  #[default]
+  Name,
+  Role,
+  Department,
+  Institution,
+  Phone,
+  Emails,
+  FooterColor,
+  SmtpUser,
+  SmtpPass,
+  WorkerUrl,
+  ApiSecret,
 }
 
 #[derive(Debug, Clone)]
 pub enum Notification {
-    Info(String),
-    Success(String),
-    Error(String),
+  Info(String),
+  Success(String),
+  Error(String),
 }
