@@ -49,21 +49,21 @@ async fn main() -> Result<()> {
           app.set_notification(Notification::Error(format!("Sending failed: {}", err)));
         }
         Action::LogsFetched(logs) => {
-          app.logs = logs;
+          app.dashboard.logs = logs;
           app.set_notification(Notification::Success("Logs updated".to_string()));
         }
         Action::LogsFailed(err) => {
           app.set_notification(Notification::Error(format!("Fetch failed: {}", err)));
         }
         Action::FiltersFetched(filters) => {
-          app.filter_options = filters;
+          app.dashboard.filter_options = filters;
         }
         Action::FiltersFailed(err) => {
           app.set_notification(Notification::Error(format!("Filters failed: {}", err)));
         }
         Action::LogsDeleted(id) => {
-          app.logs.retain(|l| l.tracking_id != id);
-          app.selected_summary_id = None;
+          app.dashboard.logs.retain(|l| l.tracking_id != id);
+          app.dashboard.selected_summary_id = None;
           app.set_notification(Notification::Success("Entry deleted".to_string()));
         }
       }

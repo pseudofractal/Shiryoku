@@ -9,6 +9,8 @@ pub struct EmailDraft {
   pub body: String,
   pub attachments: Vec<PathBuf>,
   pub scheduled_at: Option<DateTime<Utc>>,
+  #[serde(default)]
+  pub schedule: ScheduleMetadata,
 }
 
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -56,5 +58,16 @@ pub struct LogEntry {
   pub country: String,
   pub city: String,
   pub user_agent: String,
+  pub timezone: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct ScheduleMetadata {
+  pub day: String,
+  pub month: String,
+  pub year: String,
+  pub hour: String,
+  pub minute: String,
+  pub second: String,
   pub timezone: String,
 }

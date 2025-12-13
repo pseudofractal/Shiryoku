@@ -11,6 +11,7 @@ pub enum CurrentPage {
   Compose,
   Config,
   Dashboard,
+  Schedule,
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -21,6 +22,19 @@ pub enum ComposeField {
   Body,
   Attachments,
   SendButton,
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum ScheduleField {
+  #[default]
+  Day,
+  Month,
+  Year,
+  Hour,
+  Minute,
+  Second,
+  Timezone,
+  Submit,
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
