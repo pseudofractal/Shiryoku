@@ -423,7 +423,8 @@ fn draw_detail_popup(frame: &mut Frame, summary: &RecipientSummary, area: Rect) 
 
   let block = Block::default()
     .borders(Borders::ALL)
-    .title(format!(" Activity: {} ", summary.decoded_email));
+    .title(format!(" Activity: {} ", summary.decoded_email))
+    .title_bottom(ratatui::text::Line::from("[Ctrl+d] Delete History").right_aligned());
   let inner = block.inner(popup_area);
   frame.render_widget(block, popup_area);
 

@@ -35,3 +35,27 @@ pub async fn fetch_filters(worker_url: &str, api_secret: &str) -> Result<FilterO
   let filters: FilterOptions = response.json().await.context("Failed to parse filters")?;
   Ok(filters)
 }
+
+pub async fn delete_recipient_logs(
+  worker_url: &str,
+  api_secret: &str,
+  tracking_id: &str,
+) -> Result<()> {
+  let client = Client::new();
+  let url = format!(
+    "{}/api/logs?secret={}&tracking_id={}",
+    worker_url, api_secret, tracking_id
+  );
+
+  let response = client
+    .delete(&url)
+    .send()
+    .await
+    .context("Failed to send delete request")?;
+
+  if !response.status().is_success() {
+    return Err(anyhow::anyhow!("Worker error: {}", response.status()));
+  }
+
+  Ok(())
+}

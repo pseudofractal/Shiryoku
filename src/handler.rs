@@ -21,6 +21,7 @@ pub enum Action {
   LogsFailed(String),
   FiltersFetched(FilterOptions),
   FiltersFailed(String),
+  LogsDeleted(String),
 }
 
 /// Main entry point for key event handling.
@@ -38,7 +39,31 @@ pub async fn handle_key_events(key: KeyEvent, app: &mut App, tx: mpsc::Sender<Ac
 
 async fn handle_dashboard_events(key: KeyEvent, app: &mut App, tx: mpsc::Sender<Action>) -> bool {
   // Popup Interaction
-  if app.selected_summary_id.is_some() {
+  if let Some(selected_id) = &app.selected_summary_id {
+    if key.code == KeyCode::Char('d')
+      && key
+        .modifiers
+        .contains(crossterm::event::KeyModifiers::CONTROL)
+    {
+      let tracking_id = selected_id.clone();
+      let url = app.config.worker_url.clone();
+      let secret = app.config.api_secret.clone();
+      let tx_delete = tx.clone();
+      app.set_notification(Notification::Info("Deleting logs...".to_string()));
+      tokio::spawn(async move {
+        match client::delete_recipient_logs(&url, &secret, &tracking_id).await {
+          Ok(_) => tx_delete
+            .send(Action::LogsDeleted(tracking_id))
+            .await
+            .unwrap(),
+          Err(e) => tx_delete
+            .send(Action::LogsFailed(e.to_string()))
+            .await
+            .unwrap(),
+        }
+      });
+      return false; // Don't close immediately, wait for async success
+    }
     if matches!(key.code, KeyCode::Esc | KeyCode::Enter | KeyCode::Char('q')) {
       app.selected_summary_id = None;
       return true;

@@ -61,6 +61,11 @@ async fn main() -> Result<()> {
         Action::FiltersFailed(err) => {
           app.set_notification(Notification::Error(format!("Filters failed: {}", err)));
         }
+        Action::LogsDeleted(id) => {
+          app.logs.retain(|l| l.tracking_id != id);
+          app.selected_summary_id = None;
+          app.set_notification(Notification::Success("Entry deleted".to_string()));
+        }
       }
     }
     if event::poll(std::time::Duration::from_millis(10))? {

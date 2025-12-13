@@ -76,6 +76,16 @@ export default {
       if (secret !== env.API_SECRET) {
         return new Response('Unauthorized', { status: 401 });
       }
+
+      if (request.method === 'DELETE') {
+        const trackingId = url.searchParams.get('tracking_id');
+        if (!trackingId) {
+          return new Response('Missing tracking_id', { status: 400 });
+        }
+        const result = await env.DB.prepare('DELETE FROM logs WHERE tracking_id = ?').bind(trackingId).run();
+        return Response.json({ success: true, changes: result.meta.changes });
+      }
+
       const { results } = await env.DB.prepare('SELECT * FROM logs ORDER BY id DESC LIMIT 100').all();
       return Response.json(results);
     }
