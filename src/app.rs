@@ -17,6 +17,7 @@ pub struct App {
   // Compose State
   pub compose_field: ComposeField,
   pub draft: EmailDraft,
+  pub attachment_input: String,
 
   // Config State
   pub config_field: ConfigField,
@@ -47,6 +48,13 @@ impl App {
     let config = Storage::load_config().unwrap_or_default();
     let draft = Storage::load_draft().unwrap_or_default();
 
+    let attachment_input = draft
+      .attachments
+      .iter()
+      .map(|p| p.to_string_lossy().to_string())
+      .collect::<Vec<_>>()
+      .join("; ");
+
     Self {
       should_quit: false,
       input_mode: InputMode::Normal,
@@ -54,6 +62,7 @@ impl App {
       notification: None,
       compose_field: ComposeField::Recipient,
       draft,
+      attachment_input,
       config_field: ConfigField::Name,
       config,
       logs: Vec::new(),
@@ -68,8 +77,18 @@ impl App {
   }
 
   pub fn quit(&mut self) {
+    self.sync_attachments();
     let _ = Storage::save_draft(&self.draft);
     self.should_quit = true;
+  }
+  pub fn sync_attachments(&mut self) {
+    self.draft.attachments = self
+      .attachment_input
+      .split(';')
+      .map(|s| s.trim())
+      .filter(|s| !s.is_empty())
+      .map(std::path::PathBuf::from)
+      .collect();
   }
 
   pub fn set_notification(&mut self, note: Notification) {
@@ -98,7 +117,8 @@ impl App {
   fn cycle_compose_field(&mut self) {
     self.compose_field = match self.compose_field {
       ComposeField::Recipient => ComposeField::Subject,
-      ComposeField::Subject => ComposeField::Body,
+      ComposeField::Subject => ComposeField::Attachments,
+      ComposeField::Attachments => ComposeField::Body,
       ComposeField::Body => ComposeField::SendButton,
       ComposeField::SendButton => ComposeField::Recipient,
     };
@@ -206,6 +226,7 @@ impl App {
     match self.compose_field {
       ComposeField::Recipient => self.draft.recipient.push(c),
       ComposeField::Subject => self.draft.subject.push(c),
+      ComposeField::Attachments => self.attachment_input.push(c),
       ComposeField::Body => {}
       ComposeField::SendButton => {}
     }
@@ -218,6 +239,9 @@ impl App {
       }
       ComposeField::Subject => {
         self.draft.subject.pop();
+      }
+      ComposeField::Attachments => {
+        self.attachment_input.pop();
       }
       ComposeField::Body => {}
       ComposeField::SendButton => {}

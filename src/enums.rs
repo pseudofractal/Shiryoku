@@ -19,6 +19,7 @@ pub enum ComposeField {
   Recipient,
   Subject,
   Body,
+  Attachments,
   SendButton,
 }
 

@@ -53,7 +53,24 @@ pub async fn send_email(config: AppConfig, draft: EmailDraft) -> Result<()> {
     }
   }
 
-  let multipart = MultiPart::mixed().multipart(related);
+  let mut multipart = MultiPart::mixed().multipart(related);
+
+  for path in compiled.attachments {
+    if let Ok(file_content) = fs::read(&path) {
+      let filename = path
+        .file_name()
+        .map(|s| s.to_string_lossy().to_string())
+        .unwrap_or_default();
+      let content_type = mime_guess::from_path(&path).first_or_octet_stream();
+
+      let part = SinglePart::builder()
+        .header(header::ContentType::parse(content_type.as_ref()).unwrap())
+        .header(header::ContentDisposition::attachment(&filename))
+        .body(file_content);
+
+      multipart = multipart.singlepart(part);
+    }
+  }
 
   let email = email_builder
     .multipart(multipart)

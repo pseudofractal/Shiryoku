@@ -4,7 +4,7 @@ use crate::enums::{ComposeField, CurrentPage, DashboardFocus, InputMode, Notific
 use crate::mailer;
 use crate::models::{FilterOptions, LogEntry};
 use crate::storage::Storage;
-use crossterm::event::{KeyCode, KeyEvent};
+use crossterm::event::{KeyCode, KeyEvent, KeyModifiers};
 use crossterm::{
   execute,
   terminal::{EnterAlternateScreen, LeaveAlternateScreen, disable_raw_mode, enable_raw_mode},
@@ -200,6 +200,49 @@ async fn handle_standard_normal_input(
       false
     }
     KeyCode::Enter => handle_enter_action(app, tx).await,
+    KeyCode::Char('o') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+      if app.current_page == CurrentPage::Compose && app.compose_field == ComposeField::Attachments
+      {
+        // Must exit raw mode temporarily so the OS dialog can draw correctly
+        let _ = disable_raw_mode();
+        let _ = execute!(io::stdout(), LeaveAlternateScreen);
+        let files = rfd::FileDialog::new()
+          .set_title("Select Attachments")
+          .pick_files();
+        let _ = enable_raw_mode();
+        let _ = execute!(io::stdout(), EnterAlternateScreen);
+        if let Some(paths) = files {
+          let paths_vec: Vec<String> = paths
+            .iter()
+            .map(|p| p.to_string_lossy().to_string())
+            .collect();
+
+          if !app.attachment_input.is_empty() {
+            app.attachment_input.push_str("; ");
+          }
+          app.attachment_input.push_str(&paths_vec.join("; "));
+          app.set_notification(Notification::Success(format!(
+            "Added {} files",
+            paths.len()
+          )));
+        }
+        true
+      } else {
+        false
+      }
+    }
+    KeyCode::Char('x') if key.modifiers.contains(KeyModifiers::CONTROL) => {
+      if app.current_page == CurrentPage::Compose && app.compose_field == ComposeField::Attachments
+      {
+        app.attachment_input.clear();
+        app.sync_attachments();
+        let _ = Storage::save_draft(&app.draft);
+        app.set_notification(Notification::Info("Attachments cleared".to_string()));
+        true
+      } else {
+        false
+      }
+    }
     KeyCode::Char('s')
       if key
         .modifiers
@@ -248,7 +291,14 @@ async fn handle_enter_action(app: &mut App, tx: mpsc::Sender<Action>) -> bool {
     }
     ComposeField::SendButton => {
       app.set_notification(Notification::Info("Sending email...".to_string()));
-      let draft = app.draft.clone();
+      let mut draft = app.draft.clone();
+      draft.attachments = app
+        .attachment_input
+        .split(';')
+        .map(|s| s.trim())
+        .filter(|s| !s.is_empty())
+        .map(std::path::PathBuf::from)
+        .collect();
       let config = app.config.clone();
       let tx_clone = tx.clone();
 
@@ -275,6 +325,7 @@ fn handle_standard_editing_input(key: KeyEvent, app: &mut App) -> bool {
     KeyCode::Esc => {
       app.toggle_editing();
       if app.current_page == CurrentPage::Compose {
+        app.sync_attachments();
         let _ = Storage::save_draft(&app.draft);
       }
     }
@@ -282,6 +333,7 @@ fn handle_standard_editing_input(key: KeyEvent, app: &mut App) -> bool {
       app.toggle_editing();
       app.cycle_field();
       if app.current_page == CurrentPage::Compose {
+        app.sync_attachments();
         let _ = Storage::save_draft(&app.draft);
       }
     }

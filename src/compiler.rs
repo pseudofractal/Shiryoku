@@ -13,6 +13,7 @@ pub struct CompiledEmail {
   pub html_body: String,
   pub plain_body: String,
   pub inline_images: Vec<InlineImage>,
+  pub attachments: Vec<PathBuf>,
 }
 
 pub fn compile(draft: &EmailDraft, identity: &UserIdentity, worker_url: &str) -> CompiledEmail {
@@ -34,6 +35,7 @@ pub fn compile(draft: &EmailDraft, identity: &UserIdentity, worker_url: &str) ->
     html_body: full_html,
     plain_body: full_plain,
     inline_images,
+    attachments: draft.attachments.clone(),
   }
 }
 

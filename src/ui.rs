@@ -57,6 +57,7 @@ fn draw_compose(frame: &mut Frame, app: &App, area: Rect) {
     .constraints([
       Constraint::Length(3), // To
       Constraint::Length(3), // Subject
+      Constraint::Length(3), // Attachments
       Constraint::Min(5),    // Body
       Constraint::Length(3), // Send Button
     ])
@@ -67,6 +68,7 @@ fn draw_compose(frame: &mut Frame, app: &App, area: Rect) {
     &[
       ComposeField::Recipient,
       ComposeField::Subject,
+      ComposeField::Attachments,
       ComposeField::Body,
       ComposeField::SendButton,
     ],
@@ -87,13 +89,21 @@ fn draw_compose(frame: &mut Frame, app: &App, area: Rect) {
     app.draft.body.clone()
   };
 
+  let attach_widget = Paragraph::new(app.attachment_input.as_str())
+    .block(
+      Block::default()
+        .borders(Borders::ALL)
+        .title("Attachments (semicolon separated paths)"),
+    )
+    .style(styles[2]);
+
   let body = Paragraph::new(body_content)
     .block(
       Block::default()
         .borders(Borders::ALL)
         .title("Body (Markdown) - Press Enter to Edit"),
     )
-    .style(styles[2]);
+    .style(styles[3]);
 
   let button_text = if app.compose_field == ComposeField::SendButton {
     "> [SEND EMAIL] <"
@@ -104,12 +114,13 @@ fn draw_compose(frame: &mut Frame, app: &App, area: Rect) {
   let send_btn = Paragraph::new(button_text)
     .alignment(ratatui::layout::Alignment::Center)
     .block(Block::default().borders(Borders::ALL))
-    .style(styles[3]);
+    .style(styles[4]);
 
   frame.render_widget(recipient, layout[0]);
   frame.render_widget(subject, layout[1]);
-  frame.render_widget(body, layout[2]);
-  frame.render_widget(send_btn, layout[3]);
+  frame.render_widget(attach_widget, layout[2]);
+  frame.render_widget(body, layout[3]);
+  frame.render_widget(send_btn, layout[4]);
 }
 
 fn draw_config(frame: &mut Frame, app: &App, area: Rect) {
@@ -396,7 +407,6 @@ fn draw_summary_list(frame: &mut Frame, app: &App, area: Rect) {
         Style::default()
       }),
   )
-  // CHANGED: Fixed deprecated method
   .row_highlight_style(
     Style::default()
       .bg(Color::DarkGray)
@@ -492,11 +502,17 @@ fn draw_status_bar(frame: &mut Frame, app: &App, area: Rect) {
     }
   } else {
     match app.input_mode {
-      InputMode::Normal => (
-        " [Tab] Next | [Enter] Edit | [Ctrl+Enter] Send Email | [1/2] Switch Page | [q] Quit"
-          .to_string(),
-        Color::DarkGray,
-      ),
+      InputMode::Normal => {
+        let base_help = " [Tab] Next | [Enter] Edit | [Ctrl+Enter] Send | [1/2/3] Nav | [q] Quit";
+        let extra_help = if app.current_page == CurrentPage::Compose
+          && app.compose_field == ComposeField::Attachments
+        {
+          " | [Ctrl+o] Browse Files | [Ctrl+x] Clear Attachments"
+        } else {
+          ""
+        };
+        (format!("{}{}", base_help, extra_help), Color::DarkGray)
+      }
       InputMode::Editing => (
         " Editing Mode: [Esc] Finish Editing".to_string(),
         Color::Yellow,
@@ -505,7 +521,6 @@ fn draw_status_bar(frame: &mut Frame, app: &App, area: Rect) {
   };
 
   let status = Paragraph::new(text).style(Style::default().fg(color).add_modifier(Modifier::BOLD));
-
   frame.render_widget(status, area);
 }
 
