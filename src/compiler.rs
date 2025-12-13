@@ -107,12 +107,29 @@ fn generate_footer(identity: &UserIdentity) -> String {
   let emails_html = identity
     .emails
     .iter()
-    .map(|email| format!("<a href=\"mailto:{}\">{}</a>", email, email))
+    .map(|email| format!(r#"<a href="mailto:{}" style="color: {}; text-decoration: none;">{}</a>"#, email, identity.footer_color, email))
     .collect::<Vec<String>>()
-    .join(" || ");
+    .join(" &bull; ");
 
   format!(
-    r#"<div style="font-family: sans-serif; border-left: 4px solid {color}; padding-left: 12px; color: #333;"><h3 style="margin: 0; color: #2c3e50;">{name}</h3><p style="margin: 2px 0; font-size: 14px;">{role}<br>{dept}</p><p style="margin: 2px 0; font-size: 12px; color: #666;">{inst}</p><br><div style="font-size: 13px;"><span style="color: {color};">Phone:</span> {phone}<br><span style="color: {color};">E-mail:</span> {emails}</div></div>"#,
+    r#"
+    <div style="font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif; border-left: 4px solid {color}; padding-left: 15px; margin-top: 25px; color: #4a4a4a;">
+      
+      <h3 style="margin: 0; color: #2d3436; font-size: 19px; font-weight: 700; line-height: 1.2;">{name}</h3>
+      
+      <div style="margin-top: 4px; font-size: 13px; color: {color}; font-weight: 600; text-transform: uppercase; letter-spacing: 0.5px;">{role}</div>
+      
+      <div style="margin-top: 2px; font-size: 12px; color: #7f8c8d;">
+        {dept} &bull; {inst}
+      </div>
+
+      <div style="margin-top: 8px; font-size: 12px; color: #95a5a6; line-height: 1.4;">
+        <span style="font-weight: 600;">Tel:</span> {phone}<br>
+        <span style="font-weight: 600;">Email:</span> {emails}
+      </div>
+
+    </div>
+    "#,
     color = identity.footer_color,
     name = identity.name,
     role = identity.role,
@@ -125,20 +142,21 @@ fn generate_footer(identity: &UserIdentity) -> String {
 
 fn generate_plain_footer(identity: &UserIdentity) -> String {
   format!(
-    "{}\n{}\n{}\n{}\n\nPhone: {}\nEmail: {}",
-    identity.name,
-    identity.role,
-    identity.department,
-    identity.institution,
-    identity.phone,
-    identity.emails.join(" || ")
+      "{}\n{}\n{} - {}\n\nPhone: {}\nEmail: {}",
+      identity.name,
+      identity.role,
+      identity.department,
+      identity.institution,
+      identity.phone,
+      identity.emails.join(" | ")
   )
 }
+
 
 fn generate_tracker(base_url: &str, recipient_email: &str) -> String {
   let encoded_id = general_purpose::URL_SAFE_NO_PAD.encode(recipient_email);
   format!(
-    r#"<img src="{}/pixel.png?id={}" alt="" width="1" height="1" border="0" style="display:none;" />"#,
+    r#"<img src="{}/pixel.png?id={}" alt="" width="1" height="1" border="0" style="width:1px;height:1px;opacity:0.01;" />"#,
     base_url, encoded_id
   )
 }

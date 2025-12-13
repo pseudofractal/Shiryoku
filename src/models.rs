@@ -41,6 +41,12 @@ impl Default for UserIdentity {
   }
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct FilterOptions {
+  pub recipients: Vec<String>,
+  pub countries: Vec<String>,
+}
+
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct LogEntry {
   pub id: u32,
@@ -50,4 +56,5 @@ pub struct LogEntry {
   pub country: String,
   pub city: String,
   pub user_agent: String,
+  pub timezone: String,
 }

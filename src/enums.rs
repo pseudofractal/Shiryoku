@@ -38,6 +38,15 @@ pub enum ConfigField {
   ApiSecret,
 }
 
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum DashboardFocus {
+  #[default]
+  FilterRecipient,
+  FilterCountry,
+  FilterMinOpens,
+  List,
+}
+
 #[derive(Debug, Clone)]
 pub enum Notification {
   Info(String),

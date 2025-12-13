@@ -6,5 +6,6 @@ CREATE TABLE logs (
     ip TEXT,
     country TEXT,
     city TEXT,
-    user_agent TEXT
+    user_agent TEXT,
+    timezone TEXT
 );

@@ -1,7 +1,12 @@
 use crate::config::AppConfig;
-use crate::enums::{ComposeField, ConfigField, CurrentPage, InputMode, Notification};
-use crate::models::{EmailDraft, LogEntry};
+use crate::enums::{
+  ComposeField, ConfigField, CurrentPage, DashboardFocus, InputMode, Notification,
+};
+use crate::models::{EmailDraft, FilterOptions, LogEntry};
 use crate::storage::Storage;
+use base64::{Engine as _, engine::general_purpose};
+use chrono::{DateTime, Utc};
+use std::collections::HashMap;
 
 pub struct App {
   pub should_quit: bool,
@@ -17,7 +22,23 @@ pub struct App {
   pub config_field: ConfigField,
   pub config: AppConfig,
 
-  // Logs State
+  // Dashboard State
+  pub logs: Vec<LogEntry>,
+  pub dashboard_focus: DashboardFocus,
+  pub filter_recipient: String,
+  pub filter_country: String,
+  pub filter_min_opens: String,
+  pub dashboard_list_state: ratatui::widgets::TableState,
+  pub selected_summary_id: Option<String>,
+  pub filter_options: FilterOptions,
+}
+
+pub struct RecipientSummary {
+  pub tracking_id: String,
+  pub decoded_email: String,
+  pub country: String,
+  pub open_count: usize,
+  pub last_seen_raw: DateTime<Utc>,
   pub logs: Vec<LogEntry>,
 }
 
@@ -36,6 +57,13 @@ impl App {
       config_field: ConfigField::Name,
       config,
       logs: Vec::new(),
+      dashboard_focus: DashboardFocus::FilterRecipient,
+      filter_recipient: String::new(),
+      filter_country: String::new(),
+      filter_min_opens: String::new(),
+      dashboard_list_state: ratatui::widgets::TableState::default(),
+      selected_summary_id: None,
+      filter_options: FilterOptions::default(),
     }
   }
 
@@ -59,21 +87,11 @@ impl App {
     };
   }
 
-  pub fn switch_page(&mut self) {
-    self.current_page = match self.current_page {
-      CurrentPage::Compose => CurrentPage::Config,
-      CurrentPage::Config => CurrentPage::Compose,
-      CurrentPage::Dashboard => CurrentPage::Dashboard,
-    };
-    self.input_mode = InputMode::Normal;
-    self.clear_notification();
-  }
-
   pub fn cycle_field(&mut self) {
     match self.current_page {
       CurrentPage::Compose => self.cycle_compose_field(),
       CurrentPage::Config => self.cycle_config_field(),
-      CurrentPage::Dashboard => todo!("No fields in this yet."),
+      CurrentPage::Dashboard => self.cycle_dashboard_focus(),
     }
   }
 
@@ -100,6 +118,72 @@ impl App {
       ConfigField::WorkerUrl => ConfigField::ApiSecret,
       ConfigField::ApiSecret => ConfigField::Name,
     };
+  }
+
+  fn cycle_dashboard_focus(&mut self) {
+    if self.selected_summary_id.is_some() {
+      // Modal is already opened
+      return;
+    }
+    self.dashboard_focus = match self.dashboard_focus {
+      DashboardFocus::FilterRecipient => DashboardFocus::FilterCountry,
+      DashboardFocus::FilterCountry => DashboardFocus::FilterMinOpens,
+      DashboardFocus::FilterMinOpens => DashboardFocus::List,
+      DashboardFocus::List => DashboardFocus::FilterRecipient,
+    };
+  }
+
+  pub fn get_aggregated_logs(&self) -> Vec<RecipientSummary> {
+    let mut groups: HashMap<String, Vec<LogEntry>> = HashMap::new();
+    for log in &self.logs {
+      groups
+        .entry(log.tracking_id.clone())
+        .or_default()
+        .push(log.clone());
+    }
+    let mut summaries = Vec::new();
+    let min_opens = self.filter_min_opens.parse::<usize>().unwrap_or(0);
+
+    for (id, mut entries) in groups {
+      let decoded_email = general_purpose::URL_SAFE_NO_PAD
+        .decode(&id)
+        .map(|b| String::from_utf8_lossy(&b).to_string())
+        .unwrap_or_else(|_| id.clone());
+      entries.sort_by(|a, b| b.timestamp.cmp(&a.timestamp));
+
+      if entries.len() < min_opens {
+        continue;
+      }
+      if !self.filter_recipient.is_empty() && !decoded_email.contains(&self.filter_recipient) {
+        continue;
+      }
+      let country = entries
+        .first()
+        .map(|l| l.country.clone())
+        .unwrap_or_default();
+      if !self.filter_country.is_empty()
+        && !country
+          .to_lowercase()
+          .contains(&self.filter_country.to_lowercase())
+      {
+        continue;
+      }
+
+      let last_seen_str = entries.first().unwrap().timestamp.clone();
+      let last_seen_raw = DateTime::parse_from_rfc3339(&last_seen_str)
+        .map(|dt| dt.with_timezone(&Utc))
+        .unwrap_or_default();
+      summaries.push(RecipientSummary {
+        tracking_id: id,
+        decoded_email,
+        country,
+        open_count: entries.len(),
+        last_seen_raw,
+        logs: entries,
+      });
+    }
+    summaries.sort_by(|a, b| b.last_seen_raw.cmp(&a.last_seen_raw));
+    summaries
   }
 
   pub fn push_input(&mut self, c: char) {

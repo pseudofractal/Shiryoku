@@ -7,6 +7,7 @@ edition = "2024"
 anyhow = "1.0.100"
 base64 = "0.22.1"
 chrono = { version = "0.4.42", features = ["serde"] }
+chrono-tz = "0.10.4"
 crossterm = "0.29.0"
 directories = "6.0.0"
 lettre = { version = "0.11.19", features = ["tokio1", "tokio1-native-tls", "builder"] }

@@ -37,7 +37,6 @@ async fn main() -> Result<()> {
 
   loop {
     terminal.draw(|frame| ui::draw(frame, &app))?;
-
     if let Ok(action) = rx.try_recv() {
       match action {
         Action::RenderTick => {}
@@ -56,9 +55,14 @@ async fn main() -> Result<()> {
         Action::LogsFailed(err) => {
           app.set_notification(Notification::Error(format!("Fetch failed: {}", err)));
         }
+        Action::FiltersFetched(filters) => {
+          app.filter_options = filters;
+        }
+        Action::FiltersFailed(err) => {
+          app.set_notification(Notification::Error(format!("Filters failed: {}", err)));
+        }
       }
     }
-
     if event::poll(std::time::Duration::from_millis(10))? {
       if let Event::Key(key) = event::read()? {
         if key.kind == KeyEventKind::Press {
