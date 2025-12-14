@@ -1,5 +1,5 @@
 use crate::compiler::CompiledEmail;
-use crate::models::{FilterOptions, LogEntry};
+use crate::models::{FilterOptions, LogEntry, ScheduledJob};
 use anyhow::{Context, Result};
 use reqwest::Client;
 use reqwest::multipart::{Form, Part};
@@ -131,5 +131,41 @@ pub async fn schedule_email(
     return Err(anyhow::anyhow!("Worker rejected schedule: {}", text));
   }
 
+  Ok(())
+}
+
+pub async fn fetch_scheduled_jobs(worker_url: &str, api_secret: &str) -> Result<Vec<ScheduledJob>> {
+  let client = Client::new();
+  let url = format!("{}/api/schedule?secret={}", worker_url, api_secret);
+  let response = client
+    .get(&url)
+    .send()
+    .await
+    .context("Failed to connect to worker")?;
+
+  if !response.status().is_success() {
+    return Err(anyhow::anyhow!("Worker error: {}", response.status()));
+  }
+
+  let jobs: Vec<ScheduledJob> = response.json().await.context("Failed to parse jobs")?;
+  Ok(jobs)
+}
+
+pub async fn cancel_scheduled_job(worker_url: &str, api_secret: &str, job_id: &str) -> Result<()> {
+  let client = Client::new();
+  let url = format!(
+    "{}/api/schedule/{}?secret={}",
+    worker_url, job_id, api_secret
+  );
+
+  let response = client
+    .delete(&url)
+    .send()
+    .await
+    .context("Failed to send cancel request")?;
+
+  if !response.status().is_success() {
+    return Err(anyhow::anyhow!("Failed to cancel: {}", response.status()));
+  }
   Ok(())
 }

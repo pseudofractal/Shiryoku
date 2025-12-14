@@ -74,6 +74,10 @@ fn handle_dashboard_normal_input(key: KeyEvent, app: &mut App, tx: mpsc::Sender<
       helper::trigger_fetch(app, tx);
       false
     }
+    KeyCode::Char('4') => {
+      helper::trigger_fetch_jobs(app, tx);
+      false
+    }
     KeyCode::Char('r') => {
       helper::trigger_fetch(app, tx);
       false

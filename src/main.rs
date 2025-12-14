@@ -66,6 +66,20 @@ async fn main() -> Result<()> {
           app.dashboard.selected_summary_id = None;
           app.set_notification(Notification::Success("Entry deleted".to_string()));
         }
+        Action::JobsFetched(jobs) => {
+          app.scheduled.jobs = jobs;
+          app.set_notification(Notification::Success("Scheduled jobs updated".to_string()));
+        }
+        Action::JobsFailed(err) => {
+          app.set_notification(Notification::Error(format!("Jobs fetch error: {}", err)));
+        }
+        Action::JobCancelled(id) => {
+          app.scheduled.jobs.retain(|j| j.id != id);
+          app.set_notification(Notification::Success("Job deleted".to_string()));
+        }
+        Action::JobActionFailed(err) => {
+          app.set_notification(Notification::Error(format!("Action failed: {}", err)));
+        }
       }
     }
     if event::poll(std::time::Duration::from_millis(10))? {

@@ -37,6 +37,24 @@ pub fn trigger_fetch(app: &mut App, tx: mpsc::Sender<Action>) {
   });
 }
 
+pub fn trigger_fetch_jobs(app: &mut App, tx: mpsc::Sender<Action>) {
+  app.current_page = crate::enums::CurrentPage::Scheduled;
+  app.set_notification(Notification::Info("Fetching scheduled jobs...".to_string()));
+  let url = app.config.data.worker_url.clone();
+  let secret = app.config.data.api_secret.clone();
+  let tx_jobs = tx.clone();
+
+  tokio::spawn(async move {
+    match client::fetch_scheduled_jobs(&url, &secret).await {
+      Ok(jobs) => tx_jobs.send(Action::JobsFetched(jobs)).await.unwrap(),
+      Err(e) => tx_jobs
+        .send(Action::JobsFailed(e.to_string()))
+        .await
+        .unwrap(),
+    }
+  });
+}
+
 pub fn open_external_editor(initial_text: &str) -> io::Result<String> {
   let mut temp_file = tempfile::Builder::new().suffix(".md").tempfile()?;
   write!(temp_file, "{}", initial_text)?;

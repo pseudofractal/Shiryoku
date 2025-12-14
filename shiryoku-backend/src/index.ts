@@ -9,6 +9,7 @@ export default {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
 
+    // --- PIXEL TRACKING (No Auth) ---
     if (url.pathname === '/pixel.png') {
       const id = url.searchParams.get('id') || 'unknown';
       const recentLog = await env.DB.prepare(`SELECT timestamp FROM logs WHERE tracking_id = ? ORDER BY id DESC LIMIT 1`).bind(id).first();
@@ -48,9 +49,11 @@ export default {
       });
     }
 
+    // --- AUTHENTICATION ---
     const secret = url.searchParams.get('secret');
     if (secret !== env.API_SECRET) return new Response('Unauthorized', { status: 401 });
 
+    // --- LOGS API ---
     if (url.pathname === '/api/logs') {
       if (request.method === 'DELETE') {
         const trackingId = url.searchParams.get('tracking_id');
@@ -71,6 +74,64 @@ export default {
       });
     }
 
+    // --- SCHEDULE API ---
+
+    // 1. DELETE /api/schedule/:id
+    const deleteMatch = url.pathname.match(/^\/api\/schedule\/(\d+)$/);
+    if (deleteMatch && request.method === 'DELETE') {
+      const id = deleteMatch[1];
+      const result = await env.DB.prepare('DELETE FROM scheduled_emails WHERE id = ?').bind(id).run();
+
+      if (result.meta.changes === 0) {
+        return new Response('Job not found', { status: 404 });
+      }
+      return Response.json({ success: true });
+    }
+
+    // 2. GET /api/schedule
+    if (url.pathname === '/api/schedule' && request.method === 'GET') {
+      const emails = await env.DB.prepare('SELECT * FROM scheduled_emails ORDER BY id DESC').all();
+
+      const jobs = [];
+      for (const email of emails.results) {
+        const atts = await env.DB.prepare('SELECT filename, data FROM attachments WHERE email_id = ?').bind(email.id).all();
+
+        // Helper to convert Base64 string to number array (Vec<u8>)
+        const attachments = (atts.results || []).map((a: any) => {
+          const binaryString = atob(a.data);
+          const bytes = new Uint8Array(binaryString.length);
+          for (let i = 0; i < binaryString.length; i++) {
+            bytes[i] = binaryString.charCodeAt(i);
+          }
+          return {
+            filename: a.filename,
+            content: Array.from(bytes), // Send as [12, 255, 0...] for Serde
+          };
+        });
+
+        // Map Status to TitleCase for Rust Enum
+        const statusMap: Record<string, string> = {
+          pending: 'Pending',
+          sent: 'Sent',
+          failed: 'Failed',
+        };
+
+        jobs.push({
+          id: String(email.id),
+          recipient: email.recipient,
+          subject: email.subject,
+          body: email.plain_body, // Prefer plain text for the simple TUI viewer
+          scheduled_at: email.scheduled_at,
+          recipient_timezone: 'UTC', // DB Schema limitation, defaulting to UTC
+          status: statusMap[email.status as string] || 'Pending',
+          attachments: attachments,
+        });
+      }
+
+      return Response.json(jobs);
+    }
+
+    // 3. POST /api/schedule
     if (url.pathname === '/api/schedule' && request.method === 'POST') {
       try {
         const formData = await request.formData();

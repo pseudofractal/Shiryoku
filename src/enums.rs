@@ -12,6 +12,7 @@ pub enum CurrentPage {
   Config,
   Dashboard,
   Schedule,
+  Scheduled,
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
@@ -35,6 +36,23 @@ pub enum ScheduleField {
   Second,
   Timezone,
   Submit,
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]
+pub enum ScheduledFocus {
+  #[default]
+  FilterRecipient,
+  FilterStatus,
+  List,
+}
+
+#[derive(Debug, Default, Clone, Copy, PartialEq, Eq, serde::Serialize, serde::Deserialize)]
+pub enum JobStatus {
+  #[default]
+  Pending,
+  Sent,
+  Failed,
+  Cancelled,
 }
 
 #[derive(Debug, Default, Clone, Copy, PartialEq, Eq)]

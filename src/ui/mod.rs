@@ -2,6 +2,7 @@ pub mod compose;
 pub mod config;
 pub mod dashboard;
 pub mod schedule;
+pub mod scheduled;
 pub mod statusbar;
 pub mod tabs;
 
@@ -29,7 +30,8 @@ pub fn draw(frame: &mut Frame, app: &App) {
     CurrentPage::Compose => compose::draw_compose(frame, app, chunks[1]),
     CurrentPage::Config => config::draw_config(frame, app, chunks[1]),
     CurrentPage::Dashboard => dashboard::draw_dashboard(frame, app, chunks[1]),
-    CurrentPage::Schedule => schedule::draw_schedule_page(frame, app, chunks[1]), // CHANGED
+    CurrentPage::Schedule => schedule::draw_schedule_page(frame, app, chunks[1]),
+    CurrentPage::Scheduled => scheduled::draw_scheduled(frame, app, chunks[1]),
   }
 
   statusbar::draw_status_bar(frame, app, chunks[2]);

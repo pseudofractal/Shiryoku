@@ -1,6 +1,7 @@
 use chrono::{DateTime, Utc};
 use serde::{Deserialize, Serialize};
 use std::path::PathBuf;
+pub use crate::enums::JobStatus;
 
 #[derive(Debug, Clone, Serialize, Deserialize, Default)]
 pub struct EmailDraft {
@@ -70,4 +71,22 @@ pub struct ScheduleMetadata {
   pub minute: String,
   pub second: String,
   pub timezone: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AttachmentStub {
+  pub filename: String,
+  pub content: Vec<u8>,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct ScheduledJob {
+  pub id: String,
+  pub recipient: String,
+  pub subject: String,
+  pub body: String,
+  pub scheduled_at: DateTime<Utc>,
+  pub recipient_timezone: String,
+  pub status: JobStatus,
+  pub attachments: Vec<AttachmentStub>,
 }

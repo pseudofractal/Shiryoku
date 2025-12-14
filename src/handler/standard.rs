@@ -45,6 +45,10 @@ async fn handle_standard_normal_input(
       helper::trigger_fetch(app, tx.clone());
       false
     }
+    KeyCode::Char('4') => {
+      helper::trigger_fetch_jobs(app, tx.clone());
+      false
+    }
     KeyCode::Tab => {
       app.cycle_field();
       false
@@ -123,6 +127,9 @@ async fn handle_enter_action(app: &mut App, tx: mpsc::Sender<Action>) -> bool {
     return false;
   }
   if app.current_page == CurrentPage::Dashboard {
+    return false;
+  }
+  if app.current_page == CurrentPage::Scheduled {
     return false;
   }
 

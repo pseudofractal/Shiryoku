@@ -2,6 +2,7 @@ pub mod compose;
 pub mod configuration;
 pub mod dashboard;
 pub mod schedule;
+pub mod scheduled;
 
 use crate::enums::{CurrentPage, InputMode, Notification};
 use crate::storage::Storage;
@@ -9,6 +10,7 @@ use compose::ComposeState;
 use configuration::ConfigState;
 use dashboard::DashboardState;
 use schedule::ScheduleState;
+use scheduled::ScheduledState;
 
 pub struct App {
   pub should_quit: bool,
@@ -21,6 +23,7 @@ pub struct App {
   pub config: ConfigState,
   pub dashboard: DashboardState,
   pub schedule: ScheduleState,
+  pub scheduled: ScheduledState,
 }
 
 impl App {
@@ -50,6 +53,7 @@ impl App {
       config: ConfigState::new(loaded_config),
       dashboard: DashboardState::default(),
       schedule,
+      scheduled: ScheduledState::default(),
     }
   }
 
@@ -103,6 +107,7 @@ impl App {
       CurrentPage::Config => self.config.cycle_field(forward),
       CurrentPage::Dashboard => self.dashboard.cycle_focus(forward),
       CurrentPage::Schedule => self.schedule.cycle_field(forward),
+      CurrentPage::Scheduled => self.scheduled.cycle_focus(forward),
     }
   }
 
@@ -112,6 +117,7 @@ impl App {
       CurrentPage::Config => self.config.handle_input(c),
       CurrentPage::Dashboard => self.dashboard.handle_input(c),
       CurrentPage::Schedule => self.schedule.handle_input(c),
+      CurrentPage::Scheduled => self.scheduled.handle_input(c),
     }
   }
 
@@ -121,6 +127,7 @@ impl App {
       CurrentPage::Config => self.config.handle_backspace(),
       CurrentPage::Dashboard => self.dashboard.handle_backspace(),
       CurrentPage::Schedule => self.schedule.handle_backspace(),
+      CurrentPage::Scheduled => self.scheduled.handle_backspace(),
     }
   }
 }
