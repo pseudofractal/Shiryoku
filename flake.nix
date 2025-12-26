@@ -20,6 +20,23 @@
           version = "1.0.0";
           src = ./.;
           cargoLock.lockFile = ./Cargo.lock;
+          nativeBuildInputs = [
+            pkgs.pkg-config
+          ];
+          buildInputs = [
+            # Security / Network (reqwest, lettre)
+            pkgs.openssl
+
+            # Wayland Support (rfd, clipboard, winit)
+            pkgs.wayland
+            pkgs.libxkbcommon # Needed for keyboard handling on Wayland
+
+            # X11 Support (rfd, clipboard, winit)
+            pkgs.xorg.libX11
+            pkgs.xorg.libXcursor
+            pkgs.xorg.libXi
+            pkgs.xorg.libXrandr
+          ];
         };
       }
     )
